@@ -38,32 +38,39 @@ All rights reserved.
 (define-generics sliceable
   (slice-ref sliceable i)
   (slice-length sliceable)
+  (slice-range sliceable)
   (slice-materialize sliceable [start] [end])
 
   #:fast-defaults
   ([list?
     (define slice-ref list-ref)
     (define slice-length length)
+    (define slice-range in-list)
     (define slice-materialize sublist)]
    [vector?
     (define slice-ref vector-ref)
     (define slice-length vector-length)
+    (define slice-range in-vector)
     (define slice-materialize vector-copy)]
    [string?
     (define slice-ref string-ref)
     (define slice-length string-length)
+    (define slice-range in-string)
     (define slice-materialize substring)]
    [bytes?
     (define slice-ref bytes-ref)
     (define slice-length bytes-length)
+    (define slice-range in-bytes)
     (define slice-materialize subbytes)]
    [flvector?
     (define slice-ref flvector-ref)
     (define slice-length flvector-length)
+    (define slice-range in-flvector)
     (define slice-materialize flvector-copy)]
    [fxvector?
     (define slice-ref fxvector-ref)
     (define slice-length fxvector-length)
+    (define slice-range in-fxvector)
     (define slice-materialize fxvector-copy)]))
 
 ;; ----------------------------------------------------
@@ -88,9 +95,7 @@ All rights reserved.
 
   ; allow slices to be used in for loops
   #:property prop:sequence
-  (λ (xs)
-    (let ([proc ((curry slice%-ref) xs)])
-      (sequence-map proc (in-range (slice-length xs)))))
+  (λ (xs) (slice-range xs))
 
   ; custom printing of slices
   #:methods gen:custom-write
@@ -108,6 +113,8 @@ All rights reserved.
    (define (slice-length xs)
      (- (slice%-end xs)
         (slice%-start xs)))
+   (define (slice-range xs)
+     (slice%-range xs))
    (define (slice-materialize xs [start (slice%-start xs)] [end (slice%-end xs)])
      (slice%-materialize xs))])
 
@@ -121,22 +128,54 @@ All rights reserved.
 
 ;; ----------------------------------------------------
 
+(define (slice%-range xs)
+  (let ([ys (slice%-of xs)]
+        [refs (range (slice%-start xs) (slice%-end xs))])
+    (if (list? ys)
+        (sequence-map (λ (i x) x) (in-parallel refs ys))
+        (sequence-map (λ (i) (slice-ref ys i)) refs))))
+
+;; ----------------------------------------------------
+
 (define (slice%-materialize xs)
   (slice-materialize (slice%-of xs) (slice%-start xs) (slice%-end xs)))
 
 ;; ----------------------------------------------------
 
+(define (slice-of-list xs start end)
+  (cond
+
+    ; take-right requires traversing the list as well, but need to calculate end
+    [(negative? start)
+     (let ([n (length xs)])
+       (slice-of-list xs (+ start n) end))]
+
+    ; drop the first n elements from the list, decrement end position
+    [(positive? start)
+     (let ([ys (drop xs start)])
+       (slice ys 0 (if (or (not end) (negative? end))
+                       end
+                       (- end start))))]
+
+    ; slicing from start, nothing to do
+    [else
+     (slice xs start end)]))
+
+;; ----------------------------------------------------
+
 (define (slice xs start [end #f])
-  (let ([n (slice-length xs)])
-    (cond
-      [(not end)
-       (slice xs start n)]
-      [(negative? start)
-       (slice xs (+ start n) end)]
-      [(negative? end)
-       (slice xs start (+ end n))]
-      [else
-       (if (slice%? xs)
-           (let ([i (slice%-start xs)])
-             (slice (slice%-of xs) (+ start i) (+ end i)))
-           (slice% xs start end))])))
+  (if (and (list? xs) (not (zero? start)))
+      (slice-of-list xs start end)
+      (let ([n (slice-length xs)])
+        (cond
+          [(not end)
+           (slice xs start n)]
+          [(negative? start)
+           (slice xs (+ start n) end)]
+          [(negative? end)
+           (slice xs start (+ end n))]
+          [else
+           (if (slice%? xs)
+               (let ([i (slice%-start xs)])
+                 (slice (slice%-of xs) (+ start i) (+ end i)))
+               (slice% xs start end))]))))

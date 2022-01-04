@@ -62,7 +62,7 @@ Sliver defines the `gen:sliceable` interface, which declares three methods for i
 Because `gen:sliceable` is a generic interface, all basic Racket sequences are also slices:
 
 ```racket
-(slice-ref ‘(0 1 2 3 4) 2)  ;=> 2
+(slice-ref '(0 1 2 3 4) 2)  ;=> 2
 (slice-ref #(0 1 2 3 4) 2)  ;=> 2
 (slice-ref "01234" 2)       ;=> #\2
 (slice-ref #"01234" 2)      ;=> 50
@@ -71,6 +71,13 @@ Because `gen:sliceable` is a generic interface, all basic Racket sequences are a
 The `slice` struct also implements `prop:sequence`, and can therefore be used in `for` loops and for all `sequence-` functions:
 
 ```racket
+(for ([x (slice '(0 1 2 3 4 5 6 7) 2 -2)])
+  (displayln x))
+2
+3
+4
+5
+
 (sequence-for-each displayln (slice "abcdefg" 2 -2))
 c
 d
