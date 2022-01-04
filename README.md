@@ -53,10 +53,11 @@ For example:
 
 ## The `gen:sliceable` Interface
 
-Sliver defines the `gen:sliceable` interface, which declares three methods for interfacing with slices:
+Sliver defines the `gen:sliceable` interface, which declares some methods for interfacing with slices:
 
 * `slice-ref` is used to fetch a slice value by index
 * `slice-length` is used to return the length of the slice
+* `slice-range` is used to return a sequence from the slice
 * `slice-materialize` is used to copy the slice from its source
 
 Because `gen:sliceable` is a generic interface, all basic Racket sequences are also slices:
@@ -89,6 +90,8 @@ e
 The complexity of `slice-ref` is always based on the complexity of the underlying data type. So, for the slice of a list it will be O(N), but for all others it will be O(1). 
 
 The complexity of `slice-length` is always O(1) as the value is simply computed from the start and end values of the slice.
+
+The complexity of `slice-range` is always O(1) to create, but traversing it is O(N), where N is the length of the slice.
 
 The complexity of `slice-materialize` is O(N) as it is extracting a copy from the original data structure.
 

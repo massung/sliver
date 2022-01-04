@@ -13,6 +13,7 @@ All rights reserved.
 (require racket/flonum)
 (require racket/function)
 (require racket/generic)
+(require racket/struct)
 
 ;; ----------------------------------------------------
 
@@ -20,6 +21,7 @@ All rights reserved.
          slice
          slice-ref
          slice-length
+         slice-range
          slice-materialize
 
          ; rename the structure
@@ -99,12 +101,10 @@ All rights reserved.
 
   ; custom printing of slices
   #:methods gen:custom-write
-  [(define (write-proc xs port mode)
-     (write-string "'#<slice:" port)
-     (for ([x xs])
-       (write-char #\space port)
-       (write x port))
-     (write-string ">" port))]
+  [(define write-proc
+     (make-constructor-style-printer
+      (λ (xs) 'slice)
+      (λ (xs) (list (slice-materialize xs)))))]
   
   ; implement slicing interface
   #:methods gen:sliceable
@@ -163,7 +163,7 @@ All rights reserved.
 
 ;; ----------------------------------------------------
 
-(define (slice xs start [end #f])
+(define (slice xs [start 0] [end #f])
   (if (and (list? xs) (not (zero? start)))
       (slice-of-list xs start end)
       (let ([n (slice-length xs)])
