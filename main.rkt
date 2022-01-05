@@ -23,6 +23,7 @@ All rights reserved.
          slice-length
          slice-range
          slice-materialize
+         slice-copy
 
          ; rename the structure
          (rename-out [slice%? slice?]
@@ -32,8 +33,9 @@ All rights reserved.
 
 ;; ----------------------------------------------------
 
-(define (sublist xs start end)
-  (take (drop xs start) (- end start)))
+(define (sublist xs start [end #f])
+  (let ([ys (drop xs start)])
+    (if (not end) ys (take ys (- end start)))))
 
 ;; ----------------------------------------------------
 
@@ -41,39 +43,46 @@ All rights reserved.
   (slice-ref sliceable i)
   (slice-length sliceable)
   (slice-range sliceable)
-  (slice-materialize sliceable [start] [end])
+  (slice-materialize sliceable)
+  (slice-copy sliceable start [end])
 
   #:fast-defaults
   ([list?
     (define slice-ref list-ref)
     (define slice-length length)
     (define slice-range in-list)
-    (define slice-materialize sublist)]
+    (define slice-materialize identity)
+    (define slice-copy sublist)]
    [vector?
     (define slice-ref vector-ref)
     (define slice-length vector-length)
     (define slice-range in-vector)
-    (define slice-materialize vector-copy)]
+    (define slice-materialize identity)
+    (define slice-copy vector-copy)]
    [string?
     (define slice-ref string-ref)
     (define slice-length string-length)
     (define slice-range in-string)
-    (define slice-materialize substring)]
+    (define slice-materialize identity)
+    (define slice-copy substring)]
    [bytes?
     (define slice-ref bytes-ref)
     (define slice-length bytes-length)
     (define slice-range in-bytes)
-    (define slice-materialize subbytes)]
+    (define slice-materialize identity)
+    (define slice-copy subbytes)]
    [flvector?
     (define slice-ref flvector-ref)
     (define slice-length flvector-length)
     (define slice-range in-flvector)
-    (define slice-materialize flvector-copy)]
+    (define slice-materialize identity)
+    (define slice-copy flvector-copy)]
    [fxvector?
     (define slice-ref fxvector-ref)
     (define slice-length fxvector-length)
     (define slice-range in-fxvector)
-    (define slice-materialize fxvector-copy)]))
+    (define slice-materialize identity)
+    (define slice-copy fxvector-copy)]))
 
 ;; ----------------------------------------------------
 
@@ -91,7 +100,7 @@ All rights reserved.
 
 ;; ----------------------------------------------------
 
-(struct slice% (of start end)
+(struct slice% [of start end]
   #:reflection-name 'slice
   #:guard slice-guard
 
@@ -115,8 +124,10 @@ All rights reserved.
         (slice%-start xs)))
    (define (slice-range xs)
      (slice%-range xs))
-   (define (slice-materialize xs [start (slice%-start xs)] [end (slice%-end xs)])
-     (slice%-materialize xs))])
+   (define (slice-materialize xs)
+     (slice%-materialize xs))
+   (define (slice-copy xs start [end (slice%-end xs)])
+     (slice-materialize (slice xs start end)))])
 
 ;; ----------------------------------------------------
 
@@ -138,7 +149,7 @@ All rights reserved.
 ;; ----------------------------------------------------
 
 (define (slice%-materialize xs)
-  (slice-materialize (slice%-of xs) (slice%-start xs) (slice%-end xs)))
+  (slice-copy (slice%-of xs) (slice%-start xs) (slice%-end xs)))
 
 ;; ----------------------------------------------------
 
@@ -153,9 +164,7 @@ All rights reserved.
     ; drop the first n elements from the list, decrement end position
     [(positive? start)
      (let ([ys (drop xs start)])
-       (slice ys 0 (if (or (not end) (negative? end))
-                       end
-                       (- end start))))]
+       (slice ys 0 (if (or (not end) (negative? end)) end (- end start))))]
 
     ; slicing from start, nothing to do
     [else

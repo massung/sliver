@@ -1,6 +1,6 @@
 #lang scribble/manual
 
-@require[@for-label[sliver racket/base racket/class]]
+@require[@for-label[sliver racket racket/base]]
 
 @title{Sliver}
 @author[@author+email["Jeffrey Massung" "massung@gmail.com"]]
@@ -24,18 +24,18 @@ This is a brief example of slicing a string, which references the original inste
 @racketblock[
  (define str "Hello, world!")
 
- ; slices can index using negative values as "from end"
+ (code:comment "slices can index using negative values as 'from end'")
  (define hello (slice str 0 5))
  (define world (slice str -6 -1))
 
- ; slices can be indexed
+ (code:comment "slices can be indexed")
  (displayln (slice-ref world 2))
 
- ; slices are sequences and can use for loops and all sequence- functions
+ (code:comment "slices are sequences and can use for loops and all sequence- functions")
  (for ([c hello])
    (display (char-upcase c)))
 
- ; slices can be displayed, which materializes them (copies from source)
+ (code:comment "slices can be displayed, which materializes them (copies from source)")
  (displayln hello)  ;=> Hello
  (displayln world)  ;=> world
 ]
@@ -60,7 +60,68 @@ The @racket[slice] function is used to create a new @racket[slice]:
 
  The @racket[start] and @racket[end] arguments can be negative, in which case they are indexes from the end of the sequence.
 
- If @racket[end] is @racket[#f] then the slice will be from @racket[start] to the end of the sequence.
+ If @racket[end] is @racket[#f] then the returned @racket[slice?] will default to the @racket[slice-length] of @racket[sliceable].
+}
+
+@defproc[(slice? [x any/c]) boolean?]{
+ Returns @racket[#t] if @racket[x] is a @racket[slice?] structure. This is different from @racket[sliceable?], but all slices are also @racket[sliceable?].
+}
+
+@defproc[(slice-of [xs slice?]) sliceable?]{
+ Returns the base @racket[sliceable?] collection @racket[xs] references. This is true even if @racket[xs] is a @racket[slice?] of a @racket[slice?] of a @racket[slice?] ....
+
+ @racketblock[
+  (slice-of (slice (slice "Hello, world!" 0 5) 1 -1))  (code:comment "\"Hello, world!\"")
+ ]
+}
+
+@defproc[(slice-start [xs slice?]) exact-nonnegative-integer?]{
+ Returns the aboslute start index of @racket[xs] given its underlying @racket[sliceable?] collection. As with @racket[slice-of], this is true regardless of how nested the @racket[slice?] is.
+
+ @racketblock[
+  (slice-start (slice (slice "Hello, world!" 2 8) 1 -1))  (code:comment "3")
+ ]                                   
+}
+
+@defproc[(slice-end [xs slice?]) exact-nonnegative-integer?]{
+ Returns the aboslute end index of @racket[xs] given its underlying @racket[sliceable?] collection. As with @racket[slice-of], this is true regardless of how nested the @racket[slice?] is.
+
+ @racketblock[
+  (slice-end (slice (slice "Hello, world!" 2 8) 1 -1))  (code:comment "7")
+ ]                                   
+}
+
+@;; ----------------------------------------------------
+@section{Sliceable Generic Interface}
+
+The @racket[gen:sliceable] interface should be implemented for any integer-indexable collection. It consists of the above four methods: @racket[slice-ref], @racket[slice-length], @racket[slice-range], and @racket[slice-materialize].
+
+The built-in Racket types @racket[list?], @racket[vector?], @racket[string?], @racket[bytes?], @racket[flvector?], and @racket[fxvector?] all implement these methods and so are both @racket[sliceable?] and also slices themselves.
+
+While the interface is fairly straight-forward. The only "tricky" bit are the definitions of @racket[slice-materialize] and @racket[slice-copy]. These are implemented the way they are so that the @italic{type} of the underlying collection can determine how to materialize/copy a slice of itself, greatly simplifying the implementation of this package and allowing it to be extended to handle future types without knowing about them.
+
+Generally speaking, @racket[slice-materialize] for a base type can simply be the @racket[identity] function, assuming the underlying type is immutable. Otherwise it could be implemented as a complete copy like so:
+
+@racketblock[
+ (define (slice-materialize xs)
+   (slice-copy xs 0 (slice-length xs)))
+]
+
+The @racket[slice-copy] method - given the collection, start and exclusive-end range - should return a copied collection of the same type, however that is best achieved for the type itself.
+
+Here is the definition of the @racket[get:sliceable] interface for @racket[vector?]:
+
+@racketblock[
+ [vector?
+  (define slice-ref vector-ref)
+  (define slice-length vector-length)
+  (define slice-range in-vector)
+  (define slice-materialize identity)
+  (define slice-copy vector-copy)]
+]
+
+@defproc[(sliceable? [x any/c]) boolean?]{
+ Returns @racket[#t] if @racket[x] implements the @racket[gen:sliceable] interface.
 }
 
 @defproc[(slice-ref [sliceable sliceable?]
@@ -102,10 +163,15 @@ The @racket[slice] function is used to create a new @racket[slice]:
  @racketblock[
   (slice-materialize (slice "Hello, world!" 0 5))  ;=> "Hello"
  ]
+
+ The default implementation of this method for non-slice structures (e.g. lists, vectors, etc.) is simply the @racket[identity] function.
 }
 
+@defproc[(slice-copy [sliceable sliceable?]
+                     [start exact-nonnegative-integer?]
+                     [end (or/c exact-nonnegative-integer? #f) #f])
+         sliceable?]{
+ Returns a new @racket[sliceable?], which is of the same type as @racket[sliceable], but a copy of the extracted range instead of a reference. If @racket[end] is @racket[#f] then the copy is from @racket[start] to the end of the @racket[sliceable?] collection.
 
-@;; ----------------------------------------------------
-@section{Sliceable Generic Interface}
-
-
+ It's rare to have to call this function. It exists as an abstraction around @racket[slice-materialize], which should be used to extract and copy sub-ranges instead.
+}
