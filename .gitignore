@@ -1,4 +1,5 @@
 compiled/
 doc/
+!doc/sliver.scrbl
 .DS_Store
 *.bak
